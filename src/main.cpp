@@ -86,7 +86,9 @@ int main() {
 
     draw_line_numbers(ed.get_start_line(), content_rect, header_texture.height, line_texture.height);
 
-    ed.draw_text();
+    BeginScissorMode(content_rect.x,content_rect.y, content_rect.width, content_rect.height);
+        ed.draw_text();
+    EndScissorMode();
 
     if (cursor->get_timer() > 0)
       DrawTexturePro(cursor_texture, cursor_source_rect, cursor->get_cursor_rect(), {0,0}, 0, WHITE);
