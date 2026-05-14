@@ -13,6 +13,9 @@ void draw_status_header(const Rectangle, const char*);
 void draw_status_footer(const Rectangle, const Editor);
 
 int main() {
+  auto flag = (int)FLAG_MSAA_4X_HINT;
+  SetConfigFlags(flag);
+
   InitWindow(600, 800, "Hello, world");
   SetTargetFPS(60);
 
@@ -23,6 +26,7 @@ int main() {
   Texture2D footer_texture = LoadTexture("./images/footer.png");
   Texture2D line_texture = LoadTexture("./images/line.png");
   Texture2D cursor_texture = LoadTexture("./images/bicballpenblack.png");
+  Texture2D mouse_texture = LoadTexture("./images/pointing_hand.png");
 
   Rectangle content_rect = {
     65, header_texture.height,
@@ -48,14 +52,24 @@ int main() {
     line_texture.height
   );
 
+  ed.open_file("./src/main.cpp");
+  ed.start_line(1);
+
   Cursor* cursor = ed.get_cursor();
+  int error_count=0;
+  HideCursor();
+
   while (!WindowShouldClose()) {
-
-    ed.update();
-
+    content_rect = {
+      65, header_texture.height,
+      header_texture.width - 81,
+      h - footer_texture.height - line_texture.height * 2 - 12
+    };
+    ed.update(content_rect);
     BeginDrawing();
     ClearBackground(RAYWHITE);
     draw_lines(line_texture, header_texture.height);
+
 
     draw_header(header_texture);
     // draw_status_header({0,0, header_texture.width, header_texture.height}, "$HOME");
@@ -70,11 +84,23 @@ int main() {
       ed
     );
 
-    draw_line_numbers(1, content_rect, header_texture.height, line_texture.height);
+    draw_line_numbers(ed.get_start_line(), content_rect, header_texture.height, line_texture.height);
+
+    ed.draw_text();
 
     if (cursor->get_timer() > 0)
       DrawTexturePro(cursor_texture, cursor_source_rect, cursor->get_cursor_rect(), {0,0}, 0, WHITE);
 
+    ed.draw_errors();
+
+
+    Vector2 mouse_pos = GetMousePosition();
+    Rectangle source_rect = {0,0, mouse_texture.width, mouse_texture.height};
+    Rectangle mouse_dest_rect {mouse_pos.x, mouse_pos.y, mouse_texture.width/2, mouse_texture.height/2};
+    Rectangle mouse_shadow_dest_rect {mouse_pos.x + 5, mouse_pos.y + 5, mouse_texture.width/2, mouse_texture.height/2};
+
+    DrawTexturePro(mouse_texture, source_rect, mouse_shadow_dest_rect, {0,0}, 0, BLACK);
+    DrawTexturePro(mouse_texture, source_rect, mouse_dest_rect, {0,0}, 0, WHITE);
     // DrawRectangleLinesEx(content_rect, 1, RED);
     EndDrawing();
   }
@@ -84,18 +110,21 @@ int main() {
 
 void draw_status_footer(const Rectangle status_rect, Editor ed) {
     Cursor* cursor = ed.get_cursor();
-    int line = cursor->get_line();
+    int line = ed.get_start_line() + cursor->get_line() - 1;
     int column = cursor->get_column();
     const char* mode_str = TextFormat("[%s]", editor_mode_str(ed.get_editor_mode()));
     Vector2 text_size = MeasureTextEx(GetFontDefault(), mode_str, 12, 1);
     auto x = status_rect.x + status_rect.width - text_size.x - 15;
     auto y = status_rect.y  + text_size.y - 2;
-    DrawText(mode_str, x, y, 12, BLACK);
+    DrawText(mode_str, x, y, 12, ColorBrightness(BLUE, -0.5));
 
     const char* line_col_str = TextFormat("[line: %d | column: %d]", line, column);
     text_size = MeasureTextEx(GetFontDefault(), line_col_str, 12, 1);
     x = status_rect.x + status_rect.width - text_size.x;
-    DrawText(line_col_str, x - text_size.x + 5, y, 12, BLACK);
+    DrawText(line_col_str, x - text_size.x + 5, y, 12, ColorBrightness(BLUE, -0.5));
+
+    x = 70;
+    DrawText(ed.get_buffer_name(), x, y, 14, ColorBrightness(BLUE, -0.2));
 }
 
 void draw_status_header(const Rectangle status_rect, const char* buffer_name) {
