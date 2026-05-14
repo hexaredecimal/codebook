@@ -48,13 +48,10 @@ int main() {
     line_texture.height
   );
 
-  Cursor cursor = ed.get_cursor();
-  float cursor_timer = 35.f;
+  Cursor* cursor = ed.get_cursor();
   while (!WindowShouldClose()) {
 
-      if (IsKeyDown(KEY_RIGHT)) {
-          cursor.move_forward(4);
-      }
+    ed.update();
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
@@ -75,12 +72,8 @@ int main() {
 
     draw_line_numbers(1, content_rect, header_texture.height, line_texture.height);
 
-    //if (cursor_timer > 0)
-      DrawTexturePro(cursor_texture, cursor_source_rect, cursor.get_cursor_rect(), {0,0}, 0, WHITE);
-    //else if (cursor_timer <= -35.0f)
-    //    cursor_timer *= -1;
-
-    // cursor_timer--;
+    if (cursor->get_timer() > 0)
+      DrawTexturePro(cursor_texture, cursor_source_rect, cursor->get_cursor_rect(), {0,0}, 0, WHITE);
 
     // DrawRectangleLinesEx(content_rect, 1, RED);
     EndDrawing();
@@ -90,14 +83,19 @@ int main() {
 }
 
 void draw_status_footer(const Rectangle status_rect, Editor ed) {
+    Cursor* cursor = ed.get_cursor();
+    int line = cursor->get_line();
+    int column = cursor->get_column();
     const char* mode_str = TextFormat("[%s]", editor_mode_str(ed.get_editor_mode()));
     Vector2 text_size = MeasureTextEx(GetFontDefault(), mode_str, 12, 1);
-
     auto x = status_rect.x + status_rect.width - text_size.x - 15;
-    // if (x + text_size.x > status_rect.width)
-
     auto y = status_rect.y  + text_size.y - 2;
     DrawText(mode_str, x, y, 12, BLACK);
+
+    const char* line_col_str = TextFormat("[line: %d | column: %d]", line, column);
+    text_size = MeasureTextEx(GetFontDefault(), line_col_str, 12, 1);
+    x = status_rect.x + status_rect.width - text_size.x;
+    DrawText(line_col_str, x - text_size.x + 5, y, 12, BLACK);
 }
 
 void draw_status_header(const Rectangle status_rect, const char* buffer_name) {
@@ -106,7 +104,6 @@ void draw_status_header(const Rectangle status_rect, const char* buffer_name) {
     Vector2 text_size = MeasureTextEx(GetFontDefault(), opened_file, 12, 1);
 
     auto x = status_rect.x + status_rect.width - text_size.x - 15;
-    // if (x + text_size.x > status_rect.width)
 
     auto y = status_rect.y + status_rect.height - text_size.y - 2;
     DrawText(opened_file, x, y, 12, BLACK);
@@ -117,10 +114,12 @@ void draw_line_numbers(const int line_start, const Rectangle rect, const int sta
     int line_count = line_start;
     auto text_color = ColorBrightness(BLUE, 0.5);
     for (int y = starty; y <= rect.height + 2 * line_rect_height; y += line_rect_height) {
-        auto text = TextFormat("%d", line_count++);
+        char text[1024];
+        snprintf(text, sizeof(text), "%d", line_count);
         Vector2 text_size = MeasureTextEx(GetFontDefault(), text, 12, 1);
         int x = gutter_rect.width - text_size.x - 4;
         DrawText(text, x,y + gutter_rect.height /2 , 12, text_color);
+        line_count++;
     }
 }
 
@@ -157,8 +156,6 @@ void draw_footer(const Texture2D footer_texture) {
       footer_rect.x += footer_rect.width + 1;
       dest_rect.x += footer_rect.width;
     }
-
-    // DrawRectangleLinesEx({0, h - footer_rect.height, w, footer_rect.height}, 1, BLUE);
 }
 
 void draw_line(const Texture2D line_texture, float starty) {
