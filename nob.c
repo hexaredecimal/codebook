@@ -47,6 +47,7 @@ bool build_example(void) {
   Nob_Cmd cmd = {0};
   nob_cmd_append(&cmd, "g++");
   nob_cmd_append(&cmd, "-ggdb");
+  nob_cmd_append(&cmd, "-std=c++17");
   nob_cmd_append(&cmd, raylib_includes);
   nob_cmd_append(&cmd, includes);
   nob_cmd_append(&cmd, "src/main.cpp");
