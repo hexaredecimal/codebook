@@ -143,6 +143,17 @@ public:
       int dummy_size = MeasureText(TextFormat("%c", c), 11);
       m_cursor.update(content_rect);
 
+      float wheel = GetMouseWheelMove();
+      int _start_line = this->get_start_line();
+      if (wheel > 0) {
+        this->start_line(_start_line - 1);
+      }
+
+      if (wheel < 0) {
+        this->start_line(_start_line + 1);
+      }
+
+
       if (IsKeyPressed(KEY_RIGHT)) {
         if (c == '\n')
           m_cursor.move_down();
@@ -165,7 +176,7 @@ public:
         bool can_move = m_cursor.move_down();
         std::cout << "Before: " << this->get_start_line() << std::endl;
         if (!can_move) {
-          this->start_line(this->get_start_line() + 1);
+          this->start_line(_start_line + 1);
         }
         std::cout << "After: " << this->get_start_line() << std::endl;
       }
@@ -288,7 +299,7 @@ public:
             if (c == '<') {
                 for (int i = index + 1; i < (int)m_chars.size(); i++) {
                     char c = m_chars[i].get_char();
-                    if (c == '>' || c == '=') { index = i; break; }
+                    if (c == '>' || c == '=' || c == ' ') { index = i; break; }
                     m_chars[i].set_color(BROWN);
                 }
 
