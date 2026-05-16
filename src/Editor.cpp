@@ -117,9 +117,9 @@ void Editor::update(Rectangle content_rect) {
     }
 }
 
-void Editor::report_error(const char* message) { this->report(message, ErrorType::ERROR); }
-void Editor::report_info(const char* message) { this->report(message, ErrorType::INFO); }
-void Editor::report_warning(const char* message) { this->report(message, ErrorType::WARNING); }
+void Editor::report_error(std::string message) { this->report(message, ErrorType::ERROR); }
+void Editor::report_info(std::string message) { this->report(message, ErrorType::INFO); }
+void Editor::report_warning(std::string message) { this->report(message, ErrorType::WARNING); }
 
 
 void Editor::insert_char(char c) {
@@ -127,7 +127,7 @@ void Editor::insert_char(char c) {
     buffer->insert_char(c);
     build_line_offsets();
     prepare_visible_chars(buffer->get_start_line());
-    syntax_highlight();
+    buffer->highlight(m_chars);
 }
 
 void Editor::delete_char() {
@@ -141,7 +141,7 @@ void Editor::delete_char() {
             start_line(buffer->get_start_line() - m_max_viewable_lines / 2);
         } else {
             prepare_visible_chars(buffer->get_start_line());
-            syntax_highlight();
+            buffer->highlight(m_chars);
         }
 
     }
@@ -164,8 +164,10 @@ Buffer Editor::get_buffer() {
 
 void Editor::open_file(const char* path) {
     const char* source = LoadFileText(path);
+
     if (!source) {
-        report_error((std::string("Failed to load: `") + path + "`").c_str());
+        std::string err = std::string("Failed to load: `") + path + "`";
+        report_error(err);
         return;
     }
 
@@ -175,13 +177,26 @@ void Editor::open_file(const char* path) {
 
     m_buffer_list.push_back(Buffer(std::string(path), std::string(source), m_cursor_w, m_cursor_h));
     int last = m_buffer_list.size() - 1;
-    Cursor* cursor = m_buffer_list[last].get_cursor();
+    Buffer* this_buffer = &m_buffer_list[last];
+    Cursor* cursor = this_buffer->get_cursor();
     cursor->set_cursor_position({m_content_rect.x, m_content_rect.y});
+
+    const char* raw_ext = GetFileExtension(path);
+
+    if (raw_ext) {
+      std::string ext = std::string(raw_ext);
+        this_buffer->set_extension(ext);
+      Highlighter* highlighter = CommonSyntax::get_highligher(ext);
+      if (highlighter != nullptr)
+          this_buffer->set_highlighter(highlighter);
+    }
 
     m_render_start_index = 0;
     build_line_offsets();
     prepare_visible_chars(1);
-    syntax_highlight();
+
+    Buffer current_buffer = m_buffer_list[m_buffer_index];
+    current_buffer.highlight(m_chars);
 }
 
 void Editor::draw_text() {
@@ -268,120 +283,6 @@ void Editor::prepare_visible_chars(int start_line_number) {
     }
 }
 
-void Editor::syntax_highlight() {
-    std::vector<const char*> keywords {
-        "include", "if", "else", "define", "switch", "return", "for", "while", "do",
-        "auto", "class", "struct", "namespace", "using", "typedef",
-        "const", "constexpr", "enum", "union", "public", "private",
-        "protected", "pragma", "this", "inline", "break", "continue",
-        "goto"
-    };
-
-    std::vector<const char*> built_ins {
-        "int", "float", "double", "short", "long", "void", "bool",
-        "int32_t", "uint32_t", "int8_t", "uint8_t", "int16_t", "uint16_t",
-        "int16_t", "uint64_t", "char", "true", "false"
-    };
-
-    for (int index = 0; index < (int)m_chars.size(); index++) {
-        CharView* cv = &m_chars[index];
-        char c = cv->get_char();
-
-        if (c == '/' && index + 1 < m_chars.size() && m_chars[index + 1].get_char() == '*') {
-            Color color = ColorBrightness(GREEN, -0.5);
-            for (int i = index; i < (int)m_chars.size(); i++) {
-                c = m_chars[i].get_char();
-                if (c == '*' && i + 1 < m_chars.size() && m_chars[i + 1].get_char() == '/') {
-                    m_chars[i].set_color(color);
-                    m_chars[i + 1].set_color(color);
-                    index = i + 1;
-                    break;
-                }
-                m_chars[i].set_color(color);
-            }
-        } else if (c == '/' && index + 1 < m_chars.size() && m_chars[index + 1].get_char() == '/') {
-            Color color = ColorBrightness(GREEN, -0.5);
-            int line = cv->get_line();
-            for (int i = index; i < (int)m_chars.size(); i++) {
-                if (m_chars[i].get_line() > line) {
-                    index = i;
-                    break;
-                }
-                m_chars[i].set_color(color);
-            }
-        } else if (c == '<') {
-            for (int i = index + 1; i < (int)m_chars.size(); i++) {
-                char c = m_chars[i].get_char();
-                if (c == '>' || c == '=' || c == ' ') { index = i; break; }
-                m_chars[i].set_color(BROWN);
-            }
-
-        } else if (c == '"' || c == '\'') {
-            Color col = ColorBrightness(ORANGE, 0.0f);
-            cv->set_color(col);
-            char start_char = c;
-            char escape_symbol = '\\';
-            for (int i = index + 1; i < (int)m_chars.size(); i++) {
-                char t = m_chars[i].get_char();
-                if (t == escape_symbol && i + 1 < m_chars.size()) {
-                    if (m_chars[i + 1].get_char() == start_char) {
-                        m_chars[i].set_color(col);
-                        m_chars[i + 1].set_color(col);
-                        i += 1;
-                        continue;
-                    }
-                }
-
-                if (t == escape_symbol && i + 2 < m_chars.size() && m_chars[i + 1].get_char() == escape_symbol) {
-                    if (m_chars[i + 2].get_char() == start_char) {
-                        std::cout <<  "Found: " << t << " and " << m_chars[i + 1].get_char() << std::endl;
-                        m_chars[i].set_color(col);
-                        m_chars[i + 1].set_color(col);
-                        m_chars[i + 2].set_color(col);
-                        i += 1;
-                        continue;
-                    }
-                }
-
-                if (t == start_char) {
-                    m_chars[i].set_color(col);
-                    index = i;
-                    break;
-                }
-                m_chars[i].set_color(col);
-            }
-
-        } else if (isdigit(c)) {
-            cv->set_color(BROWN);
-
-        } else if (isalpha(c)) {
-            int word_end = index;
-            while (word_end + 1 < (int)m_chars.size() &&
-                   (isalnum(m_chars[word_end + 1].get_char()) ||
-                    m_chars[word_end + 1].get_char() == '_')) {
-                word_end++;
-            }
-
-            std::string word = "";
-            for (int i = index; i <= word_end; i++)
-                word += m_chars[i].get_char();
-
-            Color col = {0,0,0,0};
-            for (const char* kw : keywords)
-                if (word == kw) { col = BLUE; break; }
-            if (col.a == 0)
-                for (const char* t : built_ins)
-                    if (word == t) { col = PURPLE; break; }
-
-            if (col.a != 0)
-                for (int i = index; i <= word_end; i++)
-                    m_chars[i].set_color(col);
-
-            index = word_end;
-        }
-    }
-}
-
 void Editor::build_line_offsets() {
     Buffer* buffer = &m_buffer_list[m_buffer_index];
     std::string contents = buffer->get_file_contents();
@@ -410,7 +311,7 @@ void Editor::start_line(int iline) {
     m_render_start_index = m_line_offsets[iline - 1];
 
     prepare_visible_chars(iline);
-    syntax_highlight();
+    buffer->highlight(m_chars);
 }
 
 void Editor::goto_line(int line) {
@@ -442,7 +343,7 @@ void Editor::goto_col(int col) {
     }
 }
 
-void Editor::report(const char* message, ErrorType type){
+void Editor::report(std::string message, ErrorType type){
     ErrorView* e = new ErrorView(message, type);
     if (m_error_messages.size() == 0)
         m_error_messages.push_back(e);
