@@ -1,5 +1,6 @@
 #pragma once
 #include <raylib.h>
+#include <string>
 
 enum class ErrorType {
     INFO,
@@ -9,12 +10,12 @@ enum class ErrorType {
 
 class ErrorView {
 public:
-    ErrorView(const char* message, ErrorType type):
+    ErrorView(std::string message, ErrorType type):
         m_timer(1.f),
         m_pos({10, GetScreenHeight() * 70.0f / 100.0f}),
         m_message(message),
         m_alpha(1.0f),
-        m_text_size(MeasureTextEx(GetFontDefault(), m_message, 14, 1)),
+        m_text_size(MeasureTextEx(GetFontDefault(), m_message.c_str(), 14, 1)),
         m_type(type){}
 
     Vector2 get_position() { return m_pos; }
@@ -48,14 +49,14 @@ public:
         if (m_type == ErrorType::INFO)
             color = GREEN;
 
-        DrawText(TextFormat("[Error]: %s", this->m_message), this->m_pos.x, this->m_pos.y, 14, Fade(color, this->m_alpha));
+        DrawText(TextFormat("[Error]: %s", this->m_message.c_str()), this->m_pos.x, this->m_pos.y, 14, Fade(color, this->m_alpha));
     }
 
 
 private:
     Vector2 m_pos;
     float m_timer;
-    const char* m_message;
+    std::string m_message;
     float m_alpha;
     Vector2 m_text_size;
     ErrorType m_type;
