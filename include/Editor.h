@@ -28,7 +28,9 @@ inline const char* editor_mode_str(const EditorMode mode) {
 
 struct Cursor {
 public:
-    Cursor(const Rectangle& content_rect, int w, int h, int line_height){
+    Cursor(const Rectangle& content_rect, int w, int h, int line_height)
+     :
+        m_current_char{0, {}, BLACK, 1, 1, 0} {
       m_content_rect = content_rect;
       m_rect = {
         m_content_rect.x,
@@ -65,6 +67,13 @@ public:
         }
     }
 
+    void set_current_char(CharView c) {
+        m_current_char = c;
+        set_line(c.get_line());
+        set_column(c.get_col());
+    }
+    CharView get_current_char() { return m_current_char; }
+
     float get_timer() { return m_timer; }
 private:
     Rectangle m_rect;
@@ -74,6 +83,7 @@ private:
     int m_col = 1;
     bool m_blink = false;
     float m_timer = 35.0f;
+    CharView m_current_char;
 };
 
 struct Editor {
@@ -112,15 +122,13 @@ public:
           if (cv.get_source_index() == m_text_index) {
             Vector2 pos = cv.get_pos();
             m_cursor.set_cursor_position({pos.x, pos.y - 15});
-            m_cursor.set_line(cv.get_line());
-            m_cursor.set_column(cv.get_col());
+            m_cursor.set_current_char(cv);
             // std::cout << cv.get_char() << std::endl;
             break;
           }
       }
 
       // std::cout << "Looking at: " << c << std::endl;
-      // std::cout << m_text_index << std::endl;
       m_cursor.update(content_rect);
       if (m_cursor.get_cursor_position().y > content_rect.height + m_line_height * 2)
           this->goto_line(m_cursor.get_line() - 1);
@@ -130,6 +138,25 @@ public:
           int delta = (wheel > 0) ? -1 : 1;
           start_line(m_start_line + delta);
       }
+
+
+      int ch = GetCharPressed();
+
+      while (ch > 0) {
+        if (ch >= 32 && ch != 127)
+            insert_char((char)ch);;
+        ch = GetCharPressed();
+      }
+
+      if (IsKeyPressed(KEY_ENTER))
+        insert_char('\n');
+
+      if (IsKeyPressed(KEY_TAB))
+        insert_char('\t');
+
+      if (IsKeyPressed(KEY_BACKSPACE))
+        delete_char();
+
 
       if (IsKeyPressed(KEY_RIGHT)) {
         if (m_text_index < (int)m_file_contents.size())
@@ -188,6 +215,30 @@ public:
     void report_warning(const char* message) { this->report(message, ErrorType::WARNING); }
 
 
+    void insert_char(char c) {
+        m_file_contents.insert(m_text_index, 1, c);
+        m_text_index += 1;
+        build_line_offsets();
+        prepare_visible_chars(m_start_line);
+        syntax_highlight();
+    }
+
+    void delete_char() {
+        if (m_text_index > 0) {
+          m_file_contents.erase(m_text_index - 1, 1);
+          m_text_index --;
+          build_line_offsets();
+          CharView c = m_cursor.get_current_char();
+          if (c.get_col() == 1 && c.get_line() == m_start_line) {
+              start_line(m_start_line - m_max_viewable_lines / 2);
+          } else {
+            prepare_visible_chars(m_start_line);
+            syntax_highlight();
+          }
+
+        }
+    }
+
     void draw_errors() {
         for (ErrorView* error: m_error_messages) {
             error->draw();
@@ -221,10 +272,20 @@ public:
         if (m_file_contents.size() == 0)
             return;
 
+        Vector2 mouse_pos = GetMousePosition();
         for (CharView char_view: m_chars) {
+            const char* text = TextFormat("%c", char_view.get_char());
             Vector2 pos = char_view.get_pos();
             Color color = char_view.get_color();
-            DrawTextEx(GetFontDefault(),TextFormat("%c", char_view.get_char()), pos, 11, 1, color);
+            DrawTextEx(GetFontDefault(),text, pos, 11, 1, color);
+
+            Vector2 size = MeasureTextEx(GetFontDefault(), text, 11, 1);
+            Rectangle text_rect = { pos.x, pos.y - m_line_height / 2, size.x, m_line_height};
+            if (CheckCollisionPointRec(mouse_pos, text_rect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                this->goto_line(char_view.get_line());
+                this->goto_col(char_view.get_col() + 1);
+                //DrawRectangleLinesEx(text_rect, 1, RED);
+            }
         }
     }
 
@@ -277,6 +338,11 @@ public:
 
             x += text_size.x + 1.1f;
             col++;
+        }
+
+        if (start >= m_file_contents.size()) {
+            CharView v(' ', {x, y}, BLACK, line, col, start);
+            m_chars.push_back(v);
         }
     }
 
@@ -425,8 +491,7 @@ private:
             if (cv.get_line() == line) {
               Vector2 pos = cv.get_pos();
               m_cursor.set_cursor_position({pos.x, pos.y - 15});
-              m_cursor.set_line(cv.get_line());
-              m_cursor.set_column(cv.get_col());
+              m_cursor.set_current_char(cv);
               m_text_index = cv.get_source_index();
               break;
             }
@@ -439,8 +504,7 @@ private:
             if (cv.get_line() == m_cursor.get_line() && cv.get_col() == col) {
               Vector2 pos = cv.get_pos();
               m_cursor.set_cursor_position({pos.x, pos.y - 15});
-              m_cursor.set_line(cv.get_line());
-              m_cursor.set_column(cv.get_col());
+              m_cursor.set_current_char(cv);
               m_text_index = cv.get_source_index();
               break;
             }
