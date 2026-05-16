@@ -51,6 +51,9 @@ bool build_example(void) {
   nob_cmd_append(&cmd, raylib_includes);
   nob_cmd_append(&cmd, includes);
   nob_cmd_append(&cmd, "src/main.cpp");
+  nob_cmd_append(&cmd, "src/Editor.cpp");
+  nob_cmd_append(&cmd, "src/Highlighter.cpp");
+  nob_cmd_append(&cmd, "src/CommonSyntax.cpp");
   nob_cmd_append(&cmd, "-o", "main.exe");
   nob_cmd_append(&cmd, libs, "-Lbuild/");
   nob_cmd_append(&cmd,
