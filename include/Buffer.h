@@ -1,9 +1,12 @@
 #pragma once
 
-#include <string>
 #include <Cursor.h>
+#include <CharView.h>
+#include <Highlighter.h>
 
+#include <string>
 #include <raylib.h>
+#include <vector>
 
 class Buffer {
 public:
@@ -14,6 +17,8 @@ public:
         m_text_index(0),
         m_start_line(1),
         m_cursor{w,h},
+        m_highlighter{nullptr},
+        m_ext{".txt"},
         m_is_dirty{false}
     {}
 
@@ -50,15 +55,29 @@ public:
         return m_file_name;
     }
 
+    void set_highlighter(Highlighter* h) { m_highlighter = h;}
+
+    void highlight(std::vector<CharView>& m_chars) {
+        if (m_highlighter != nullptr)
+            m_highlighter->highlight(m_chars);
+    }
+
     bool get_is_dirty() { return m_is_dirty; }
     void set_is_dirty(bool dirty) { m_is_dirty = dirty; }
+
+    void set_extension(std::string ext) { m_ext = ext; }
+    std::string get_extension() { return m_ext; }
 
 private:
     std::string m_file_path;
     std::string m_file_contents;
     std::string m_file_name;
+    Highlighter* m_highlighter;
+    std::string m_ext;
     int m_text_index = 0;
     int m_start_line = 1;
     Cursor m_cursor;
     bool m_is_dirty;
+
+
 };
