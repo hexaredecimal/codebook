@@ -12,6 +12,7 @@
 #include <ErrorView.h>
 #include <CharView.h>
 #include <Buffer.h>
+#include <CommonSyntax.h>
 
 enum class EditorMode {
     NORMAL,
@@ -42,6 +43,9 @@ public:
         m_buffer_index{0},
         m_cursor_w(cursor_w),
         m_cursor_h(cursor_h) {
+
+        CommonSyntax::init();
+
         Buffer temp_buffer("", "", cursor_w, cursor_h);
         Cursor* temp_cursor = temp_buffer.get_cursor();
         temp_cursor->set_cursor_position({content_rect.x, content_rect.y});
@@ -60,9 +64,9 @@ public:
     Cursor* get_cursor();
     void update(Rectangle content_rect);
 
-    void report_error(const char* message);
-    void report_info(const char* message);
-    void report_warning(const char* message);
+    void report_error(std::string message);
+    void report_info(std::string message);
+    void report_warning(std::string message);
 
     void draw_errors();
     Buffer get_buffer();
@@ -75,7 +79,6 @@ public:
     void start_line(int iline);
 private:
     void prepare_visible_chars(int start_line_number = 1);
-    void syntax_highlight();
     void build_line_offsets();
 
     void insert_char(char c);
@@ -85,7 +88,7 @@ private:
 
     void goto_line(int line);
     void goto_col(int col);
-    void report(const char* message, ErrorType type);
+    void report(std::string message, ErrorType type);
 
 
     EditorMode m_mode;
