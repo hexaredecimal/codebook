@@ -10,12 +10,12 @@ enum class ErrorType {
 class ErrorView {
 public:
     ErrorView(const char* message, ErrorType type):
-      m_timer(1.f),
-      m_pos({10, GetScreenHeight() * 70.0f / 100.0f}),
-      m_message(message),
-      m_alpha(1.0f),
-      m_text_size(MeasureTextEx(GetFontDefault(), m_message, 14, 1)),
-      m_type(type){}
+        m_timer(1.f),
+        m_pos({10, GetScreenHeight() * 70.0f / 100.0f}),
+        m_message(message),
+        m_alpha(1.0f),
+        m_text_size(MeasureTextEx(GetFontDefault(), m_message, 14, 1)),
+        m_type(type){}
 
     Vector2 get_position() { return m_pos; }
     void set_position(Vector2 pos) { m_pos = pos; }
