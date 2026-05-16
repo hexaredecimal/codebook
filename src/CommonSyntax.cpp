@@ -44,7 +44,7 @@ Highlighter CommonSyntax::c_cpp() {
     }, PURPLE);
 
     c_cpp_h.add_words({"std", "string", "vector", "shared_ptr", "unique_ptr",
-         "unordered_map"}, ColorBrightness(PINK, -0.3));
+         "unordered_map", "cout", "endl"}, ColorBrightness(PINK, -0.3));
 
     c_cpp_h.set_highter_function([](std::vector<CharView>& m_chars, int *index_ptr) {
       int index = *index_ptr;
