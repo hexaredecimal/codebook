@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstring>
 #include <ErrorView.h>
-#include <CharView.h>.h>
+#include <CharView.h>
 
 enum class EditorMode {
     NORMAL,
@@ -31,7 +31,7 @@ public:
     Cursor(const Rectangle& content_rect, int w, int h, int line_height){
       m_content_rect = content_rect;
       m_rect = {
-        m_content_rect.x + 3,
+        m_content_rect.x,
         m_content_rect.y - 15,
         w,
         h,
@@ -41,54 +41,20 @@ public:
 
     Rectangle get_cursor_rect() { return m_rect; }
     Vector2 get_cursor_position() { return { m_rect.x, m_rect.y }; }
+    void set_cursor_position(Vector2 pos) {
+        m_rect.x = pos.x;
+        m_rect.y = pos.y;
+    }
 
     int get_line() { return m_line; }
     int get_column() { return m_col; }
 
+    void set_line(int line) { m_line = line; }
+    void set_column(int column) { m_col = column; }
+
     bool get_blink() { return m_blink;}
     bool set_blink(bool blink) { m_blink = blink; }
 
-    void move_forward(int size) {
-
-        if (m_rect.x + size> m_content_rect.width)
-          if (m_rect.y + m_line_height > m_content_rect.height + 2)
-              return;
-
-
-        m_rect.x += size + m_rect.width;
-        m_col++;
-        if (m_rect.x > m_content_rect.width) {
-            move_down();
-        }
-    }
-
-    void move_back(int size) {
-        m_rect.x -= size + m_rect.width;
-        if (m_col > 1)
-          m_col--;
-        else
-            m_rect.x = m_content_rect.x + 3;
-    }
-
-    bool move_down() {
-        if (m_rect.y + m_line_height > m_content_rect.height + m_line_height)
-            return false;
-        m_rect.y += m_line_height;
-        m_rect.x = m_content_rect.x + 3;
-        m_line++;
-        m_col = 1;
-        return true;
-    }
-
-
-    bool move_up() {
-        if (m_rect.y - m_line_height < m_content_rect.y - m_line_height)
-            return false;;
-        m_rect.y -= m_line_height;
-        m_rect.x = m_content_rect.x + 3;
-        m_line--;
-        return true;
-    }
 
     void update(Rectangle content_rect){
         this->m_content_rect =content_rect;
@@ -137,48 +103,69 @@ public:
       this->m_content_rect = content_rect;
       m_max_viewable_lines = content_rect.height / m_line_height;
 
+      if (m_text_index < m_render_start_index)
+          m_text_index = m_render_start_index;
+
       float dt = GetFrameTime();
       char c = m_file_contents[m_text_index];
+      for (CharView cv: m_chars) {
+          if (cv.get_source_index() == m_text_index) {
+            Vector2 pos = cv.get_pos();
+            m_cursor.set_cursor_position({pos.x, pos.y - 15});
+            m_cursor.set_line(cv.get_line());
+            m_cursor.set_column(cv.get_col());
+            // std::cout << cv.get_char() << std::endl;
+            break;
+          }
+      }
+
       // std::cout << "Looking at: " << c << std::endl;
-      int dummy_size = MeasureText(TextFormat("%c", c), 11);
+      // std::cout << m_text_index << std::endl;
       m_cursor.update(content_rect);
+      if (m_cursor.get_cursor_position().y > content_rect.height + m_line_height * 2)
+          this->goto_line(m_cursor.get_line() - 1);
 
       float wheel = GetMouseWheelMove();
-      int _start_line = this->get_start_line();
-      if (wheel > 0) {
-        this->start_line(_start_line - 1);
+      if (wheel != 0.0f) {
+          int delta = (wheel > 0) ? -1 : 1;
+          start_line(m_start_line + delta);
       }
-
-      if (wheel < 0) {
-        this->start_line(_start_line + 1);
-      }
-
 
       if (IsKeyPressed(KEY_RIGHT)) {
-        if (c == '\n')
-          m_cursor.move_down();
-        else
-          m_cursor.move_forward(dummy_size);
-        m_text_index++;
+        if (m_text_index < (int)m_file_contents.size())
+            m_text_index++;
+        int y_diff = m_cursor.get_line() - m_start_line;
+        if (c == '\n' && y_diff + 1 == m_max_viewable_lines)
+            this->start_line(m_start_line + 1);
       }
 
       if (IsKeyPressed(KEY_LEFT)) {
-        m_cursor.move_back(dummy_size);
+        // m_cursor.move_back(dummy_size);
         if (m_text_index > 0)
           m_text_index--;
+        int y_diff = m_cursor.get_line() - m_start_line;
+        if (y_diff + 1 == 1 && m_cursor.get_column() == 1)
+            this->start_line(m_start_line - 1);
       }
 
       if (IsKeyPressed(KEY_UP)) {
-        m_cursor.move_up();
+          int y_diff = m_cursor.get_line() - m_start_line;
+          if (y_diff + 1 == 1 )
+              this->start_line(m_start_line - 1);
+
+          int col = m_cursor.get_column();
+          this->goto_line(m_cursor.get_line() - 1);
+          this->goto_col(col);
       }
 
       if (IsKeyPressed(KEY_DOWN)) {
-        bool can_move = m_cursor.move_down();
-        std::cout << "Before: " << this->get_start_line() << std::endl;
-        if (!can_move) {
-          this->start_line(_start_line + 1);
-        }
-        std::cout << "After: " << this->get_start_line() << std::endl;
+          int y_diff = m_cursor.get_line() - m_start_line;
+          if (y_diff + 1 == m_max_viewable_lines)
+              this->start_line(m_start_line + 1);
+
+          int col = m_cursor.get_column();
+          this->goto_line(m_cursor.get_line() + 1);
+          this->goto_col(col);
       }
 
       std::vector<int> removals{};
@@ -216,19 +203,19 @@ public:
 
     void open_file(const char* path) {
         const char* source = LoadFileText(path);
-        if (source == NULL) {
-            this->report_error((std::string("Failed to load file: `") + std::string(path) + std::string("`")).c_str());
+        if (!source) {
+            report_error((std::string("Failed to load: `") + path + "`").c_str());
             return;
         }
-
-        this->m_file_path = std::string(path);
-        this->m_file_contents = std::string(source);
-        this->build_line_offsets();
-        this->prepare_visible_chars();
-        this->syntax_highlight();
+        m_file_path     = std::string(path);
+        m_file_contents = std::string(source);
+        m_text_index         = 0;
+        m_render_start_index = 0;
+        m_start_line         = 1;
+        build_line_offsets();
+        prepare_visible_chars(1);
+        syntax_highlight();
     }
-
-
 
     void draw_text() {
         if (m_file_contents.size() == 0)
@@ -240,42 +227,56 @@ public:
             DrawTextEx(GetFontDefault(),TextFormat("%c", char_view.get_char()), pos, 11, 1, color);
         }
     }
+
     void prepare_visible_chars(int start_line_number = 1) {
-        if (m_file_contents.size() == 0) return;
+        if (m_file_contents.empty()) return;
+
+        m_chars.clear();
 
         float x = m_content_rect.x + 1;
         float y = m_content_rect.y + 10;
+        float right_edge = m_content_rect.x + m_content_rect.width;
+        float bottom_edge = m_content_rect.y + m_content_rect.height;
 
-        m_chars.clear();
-        int start = m_text_index;
         int line = start_line_number;
-        int col = 1;
+        int col  = 1;
 
-        while (true) {
-            if (start >= (int)m_file_contents.size()) break;
+        int start = m_render_start_index;
+
+        while (start < (int)m_file_contents.size()) {
+            if (y >= bottom_edge + m_line_height * 2) break;
 
             char c = m_file_contents[start];
             int source_index = start;
             start++;
 
-            Vector2 text_size = MeasureTextEx(GetFontDefault(), TextFormat("%c", c), 11, 1);
-
-            if (c == '\n' || (x + text_size.x >= m_content_rect.width && y < m_content_rect.height)) {
+            if (c == '\n') {
+                CharView v(c, {x, y}, BLACK, line, col, source_index);
+                m_chars.push_back(v);
                 y += m_line_height;
-                x = m_content_rect.x + 1;
+                x  = m_content_rect.x + 1;
                 line++;
                 col = 1;
                 continue;
             }
 
-            if (x + text_size.x < m_content_rect.width) {
-                CharView v(c, {x, y}, BLACK, line, col, source_index);
-                m_chars.push_back(v);
-                x += text_size.x + 1.1f;
-                col++;
+            if (c < 32) continue;
+
+            Vector2 text_size = MeasureTextEx(GetFontDefault(), TextFormat("%c", c), 11, 1);
+
+            if (x + text_size.x > right_edge) {
+                y += m_line_height;
+                x  = m_content_rect.x + 1;
+                col = 1;
             }
 
-            if (y + m_line_height >= m_content_rect.height + m_line_height * 4) break;
+            if (y >= m_content_rect.y) {
+                CharView v(c, {x, y}, BLACK, line, col, source_index);
+                m_chars.push_back(v);
+            }
+
+            x += text_size.x + 1.1f;
+            col++;
         }
     }
 
@@ -283,32 +284,79 @@ public:
         std::vector<const char*> keywords {
           "include", "if", "else", "define", "switch", "return", "for", "while", "do",
           "auto", "class", "struct", "namespace", "using", "typedef",
-          "const", "constexpr", "enum", "union"
+          "const", "constexpr", "enum", "union", "public", "private",
+          "protected", "pragma", "this", "inline", "break", "continue",
+          "goto"
         };
 
-        std::vector<const char*> types {
+        std::vector<const char*> built_ins {
           "int", "float", "double", "short", "long", "void", "bool",
           "int32_t", "uint32_t", "int8_t", "uint8_t", "int16_t", "uint16_t",
-          "int16_t", "uint64_t", "char"
+          "int16_t", "uint64_t", "char", "true", "false"
         };
 
         for (int index = 0; index < (int)m_chars.size(); index++) {
             CharView* cv = &m_chars[index];
             char c = cv->get_char();
 
-            if (c == '<') {
+            if (c == '/' && index + 1 < m_chars.size() && m_chars[index + 1].get_char() == '*') {
+                Color color = ColorBrightness(GREEN, -0.5);
+                for (int i = index; i < (int)m_chars.size(); i++) {
+                    c = m_chars[i].get_char();
+                    if (c == '*' && i + 1 < m_chars.size() && m_chars[i + 1].get_char() == '/') {
+                        m_chars[i].set_color(color);
+                        m_chars[i + 1].set_color(color);
+                        index = i + 1;
+                        break;
+                    }
+                    m_chars[i].set_color(color);
+                }
+            } else if (c == '/' && index + 1 < m_chars.size() && m_chars[index + 1].get_char() == '/') {
+                Color color = ColorBrightness(GREEN, -0.5);
+                int line = cv->get_line();
+                for (int i = index; i < (int)m_chars.size(); i++) {
+                    if (m_chars[i].get_line() > line) {
+                        index = i;
+                        break;
+                    }
+                    m_chars[i].set_color(color);
+                }
+            } else if (c == '<') {
                 for (int i = index + 1; i < (int)m_chars.size(); i++) {
                     char c = m_chars[i].get_char();
                     if (c == '>' || c == '=' || c == ' ') { index = i; break; }
                     m_chars[i].set_color(BROWN);
                 }
 
-            } else if (c == '"') {
+            } else if (c == '"' || c == '\'') {
                 Color col = ColorBrightness(ORANGE, 0.0f);
                 cv->set_color(col);
+                char start_char = c;
+                char escape_symbol = '\\';
                 for (int i = index + 1; i < (int)m_chars.size(); i++) {
-                    if (m_chars[i].get_char() == '"') {
-                        m_chars[i].set_color(ORANGE);
+                    char t = m_chars[i].get_char();
+                    if (t == escape_symbol && i + 1 < m_chars.size()) {
+                        if (m_chars[i + 1].get_char() == start_char) {
+                            m_chars[i].set_color(col);
+                            m_chars[i + 1].set_color(col);
+                            i += 1;
+                            continue;
+                        }
+                    }
+
+                    if (t == escape_symbol && i + 2 < m_chars.size() && m_chars[i + 1].get_char() == escape_symbol) {
+                        if (m_chars[i + 2].get_char() == start_char) {
+                            std::cout <<  "Found: " << t << " and " << m_chars[i + 1].get_char() << std::endl;
+                            m_chars[i].set_color(col);
+                            m_chars[i + 1].set_color(col);
+                            m_chars[i + 2].set_color(col);
+                            i += 1;
+                            continue;
+                        }
+                    }
+
+                    if (t == start_char) {
+                        m_chars[i].set_color(col);
                         index = i;
                         break;
                     }
@@ -334,7 +382,7 @@ public:
                 for (const char* kw : keywords)
                     if (word == kw) { col = BLUE; break; }
                 if (col.a == 0)
-                    for (const char* t : types)
+                    for (const char* t : built_ins)
                         if (word == t) { col = PURPLE; break; }
 
                 if (col.a != 0)
@@ -350,23 +398,54 @@ public:
         m_line_offsets.clear();
         m_line_offsets.push_back(0);
         for (int i = 0; i < (int)m_file_contents.size(); i++) {
-            if (m_file_contents[i] == '\n')
+            char c = m_file_contents[i];
+            if (c == '\n')
                 m_line_offsets.push_back(i + 1);
         }
     }
 
     int get_start_line() { return m_start_line; }
     void start_line(int iline) {
-        iline = std::max(1, std::min(iline, (int)m_line_offsets.size() - 1));
-        m_start_line = iline;
-        if (iline - 1 <= m_line_offsets.size())
-            build_line_offsets();
+        if (m_line_offsets.empty()) return;
 
-        m_text_index = m_line_offsets[iline - 1];
+        // Clamp to valid line range
+        iline = std::max(1, std::min(iline, (int)m_line_offsets.size()));
+        m_start_line = iline;
+
+        // Drive rendering from the line's file offset — NOT the cursor index
+        m_render_start_index = m_line_offsets[iline - 1];
+
         prepare_visible_chars(iline);
         syntax_highlight();
     }
 private:
+
+    void goto_line(int line) {
+        for (CharView cv: m_chars) {
+            if (cv.get_line() == line) {
+              Vector2 pos = cv.get_pos();
+              m_cursor.set_cursor_position({pos.x, pos.y - 15});
+              m_cursor.set_line(cv.get_line());
+              m_cursor.set_column(cv.get_col());
+              m_text_index = cv.get_source_index();
+              break;
+            }
+        }
+    }
+
+
+    void goto_col(int col) {
+        for (CharView cv: m_chars) {
+            if (cv.get_line() == m_cursor.get_line() && cv.get_col() == col) {
+              Vector2 pos = cv.get_pos();
+              m_cursor.set_cursor_position({pos.x, pos.y - 15});
+              m_cursor.set_line(cv.get_line());
+              m_cursor.set_column(cv.get_col());
+              m_text_index = cv.get_source_index();
+              break;
+            }
+        }
+    }
 
     void report(const char* message, ErrorType type){
         ErrorView* e = new ErrorView(message, type);
@@ -406,4 +485,5 @@ private:
     std::vector<CharView> m_chars;
     std::vector<int> m_line_offsets {};
     int m_start_line = 1;
+    int m_render_start_index = 0;
 };
