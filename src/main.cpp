@@ -128,7 +128,7 @@ void draw_status_footer(const Rectangle status_rect, Editor ed) {
     x = 70;
     Buffer buffer = ed.get_buffer();
     std::stringstream ss;
-    ss << buffer.get_file_name() << " " ;
+    ss << buffer.get_file_name() << " ["  << buffer.get_extension() << "] " ;
     DrawText(
       ss.str().c_str(),
       x,
