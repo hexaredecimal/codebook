@@ -1,8 +1,9 @@
-#include <iostream>
-#include <raylib.h>
-#include <sstream>
-
 #include <Editor.h>
+#include <PopupMenu.h>
+#include <raylib.h>
+
+#include <iostream>
+#include <sstream>
 
 void draw_header(const Texture2D);
 void draw_footer(const Texture2D);
@@ -12,6 +13,8 @@ void draw_lines(const Texture2D, float);
 void draw_line_numbers(const int, const Rectangle, const int, const int);
 void draw_status_header(const Rectangle, const char*);
 void draw_status_footer(const Rectangle, const Editor);
+
+PopupMenu create_popup(Editor*);
 
 int main() {
     auto flag = (int)FLAG_MSAA_4X_HINT;
@@ -30,32 +33,21 @@ int main() {
     Texture2D mouse_texture = LoadTexture("./images/pointing_hand.png");
 
     Rectangle content_rect = {
-        65, header_texture.height,
-        header_texture.width - 81,
-        h - footer_texture.height - line_texture.height * 2 - 12
-    };
+        65, header_texture.height, header_texture.width - 81,
+        h - footer_texture.height - line_texture.height * 2 - 12};
 
-
-    Rectangle cursor_source_rect = {
-        0,0,
-        cursor_texture.width,
-        cursor_texture.height
-    };
-
+    Rectangle cursor_source_rect = {0, 0, cursor_texture.width,
+                                    cursor_texture.height};
 
     SetWindowSize(header_texture.width - 5, GetScreenHeight());
 
+    Editor ed(content_rect, cursor_texture.width, cursor_texture.height,
+              line_texture.height);
 
-    Editor ed(
-        content_rect,
-        cursor_texture.width,
-        cursor_texture.height,
-        line_texture.height
-        );
-
-    ed.open_file("./src/main.cpp");
+    ed.open_file("./nob.h");
     ed.start_line(1);
 
+    PopupMenu popup = create_popup(&ed);
     HideCursor();
 
     while (!WindowShouldClose()) {
@@ -65,6 +57,8 @@ int main() {
             h - footer_texture.height - line_texture.height * 2 - 12
         };
         ed.update(content_rect);
+        popup.update(content_rect);
+
         BeginDrawing();
         ClearBackground(RAYWHITE);
         draw_lines(line_texture, header_texture.height);
@@ -95,6 +89,7 @@ int main() {
 
         ed.draw_errors();
 
+        popup.draw();
 
         Vector2 mouse_pos = GetMousePosition();
         Rectangle source_rect = {0,0, mouse_texture.width, mouse_texture.height};
@@ -103,6 +98,8 @@ int main() {
 
         DrawTexturePro(mouse_texture, source_rect, mouse_shadow_dest_rect, {0,0}, 0, BLACK);
         DrawTexturePro(mouse_texture, source_rect, mouse_dest_rect, {0,0}, 0, WHITE);
+
+        DrawFPS(w - 80,  h - 30);
         // DrawRectangleLinesEx(content_rect, 1, RED);
         EndDrawing();
     }
@@ -128,7 +125,8 @@ void draw_status_footer(const Rectangle status_rect, Editor ed) {
     x = 70;
     Buffer buffer = ed.get_buffer();
     std::stringstream ss;
-    ss << buffer.get_file_name() << " ["  << buffer.get_extension() << "] " ;
+    bool is_dirty = buffer.get_is_dirty();
+    ss << buffer.get_file_name() << (is_dirty ? "*" : " ") << "  ["  << buffer.get_extension() << "] " ;
     DrawText(
       ss.str().c_str(),
       x,
@@ -223,4 +221,54 @@ void draw_lines(const Texture2D line_texture, float starty) {
         draw_line(line_texture, starty);
         starty += line_texture.height;
     }
+}
+
+PopupMenu create_popup(Editor* editor) {
+  PopupMenu popup;
+
+  PopupItem* new_file = popup.add_item("New file");
+  PopupItem* new_buffer = popup.add_item("New tmp buffer");
+  new_buffer->set_on_click([editor]() { editor->new_buffer(); });
+
+  popup.add_separator();
+
+  PopupItem* open_file = popup.add_item("Open file");
+  PopupItem* open_dir = popup.add_item("Open directory");
+  popup.add_separator();
+
+  PopupItem* save_buffer = popup.add_item("Save buffer");
+  PopupItem* save_buffers = popup.add_item("Save buffers");
+  PopupItem* rename_buffer = popup.add_item("Rename buffer");
+  popup.add_separator();
+
+  PopupItem* next_buffer = popup.add_item("Next buffer");
+  next_buffer->set_on_click([editor]() { editor->next_buffer(); });
+
+  PopupItem* prev_buffer = popup.add_item("Previous buffer");
+  prev_buffer->set_on_click([editor]() { editor->prev_buffer(); });
+  popup.add_separator();
+
+  PopupItem* goto_line = popup.add_item("Goto line");
+  popup.add_separator();
+
+  PopupItem* cut = popup.add_item("Cut");
+  cut->set_on_click([editor]() { editor->cut(); });
+
+  PopupItem* copy = popup.add_item("Copy");
+  copy->set_on_click([editor]() { editor->copy(); });
+
+  PopupItem* paste = popup.add_item("Paste");
+  cut->set_on_click([editor]() { editor->paste(); });
+  popup.add_separator();
+
+  PopupItem* select_all = popup.add_item("Select all");
+  select_all->set_on_click([editor]() { editor->select_all(); });
+  popup.add_separator();
+
+  PopupItem* close_buffer = popup.add_item("Close buffer");
+  PopupItem* close_buffers = popup.add_item("Close buffers");
+  popup.add_separator();
+
+  PopupItem* exit = popup.add_item("Exit");
+  return popup;
 }
