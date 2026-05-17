@@ -1,8 +1,5 @@
 #include <Editor.h>
 
-
-
-
 int Editor::get_line() { return m_buffer_list[m_buffer_index].get_cursor()->get_line(); }
 int Editor::get_column() { return m_buffer_list[m_buffer_index].get_cursor()->get_column(); }
 
@@ -23,6 +20,14 @@ void Editor::update(Rectangle content_rect) {
     Cursor* cursor = current_buffer->get_cursor();
     float dt = GetFrameTime();
     std::string file_contents = current_buffer->get_file_contents();
+
+    if (file_contents.size() == 0) {
+      current_buffer->set_text_index(0);
+      current_buffer->set_file_contents(" ");
+      start_line(1);
+      return;
+    }
+
     char c = file_contents[current_buffer->get_text_index()];
     for (CharView cv: m_chars) {
         if (cv.get_source_index() == current_buffer->get_text_index()) {
@@ -66,20 +71,19 @@ void Editor::update(Rectangle content_rect) {
     std::string contents = current_buffer->get_file_contents();
 
     if (IsKeyPressed(KEY_RIGHT)) {
-        if (current_buffer->get_text_index() < (int)contents.size())
-            current_buffer->next_char();
-        int y_diff = cursor->get_line() - current_buffer->get_start_line();
-        if (c == '\n' && y_diff + 1 == m_max_viewable_lines)
-            this->start_line(current_buffer->get_start_line() + 1);
+      if (current_buffer->get_text_index() < (int)contents.size())
+        current_buffer->next_char();
+      int y_diff = cursor->get_line() - current_buffer->get_start_line();
+      if (c == '\n' && y_diff + 1 == m_max_viewable_lines)
+        this->start_line(current_buffer->get_start_line() + 1);
     }
 
     if (IsKeyPressed(KEY_LEFT)) {
-        if (current_buffer->get_text_index() > 0)
-            current_buffer->prev_char();
+      if (current_buffer->get_text_index() > 0) current_buffer->prev_char();
 
-        int y_diff = cursor->get_line() - current_buffer->get_start_line();
-        if (y_diff + 1 == 1 && cursor->get_column() == 1)
-            this->start_line(current_buffer->get_start_line() - 1);
+      int y_diff = cursor->get_line() - current_buffer->get_start_line();
+      if (y_diff + 1 == 1 && cursor->get_column() == 1)
+        this->start_line(current_buffer->get_start_line() - 1);
     }
 
     if (IsKeyPressed(KEY_UP)) {
@@ -123,6 +127,9 @@ void Editor::report_warning(std::string message) { this->report(message, ErrorTy
 
 
 void Editor::insert_char(char c) {
+    if (!m_initialized)
+        m_initialized = true;
+
     Buffer* buffer = &m_buffer_list[m_buffer_index];
     buffer->insert_char(c);
     build_line_offsets();
@@ -133,6 +140,9 @@ void Editor::insert_char(char c) {
 void Editor::delete_char() {
     Buffer* buffer = &m_buffer_list[m_buffer_index];
     if (buffer->get_text_index() > 0) {
+        if (!m_initialized)
+            m_initialized = true;
+
         buffer->delete_char();
         build_line_offsets();
         Cursor* cursor = buffer->get_cursor();
@@ -207,21 +217,72 @@ void Editor::draw_text() {
         return;
 
     Vector2 mouse_pos = GetMousePosition();
-    for (CharView char_view: m_chars) {
-        const char* text = TextFormat("%c", char_view.get_char());
-        Vector2 pos = char_view.get_pos();
-        Color color = char_view.get_color();
-        DrawTextEx(GetFontDefault(),text, pos, 11, 1, color);
+    static Vector2 dragOffset = {0};
+    static int drag_start_index = -1;
+    static int drag_end_index = -1;
 
-        Vector2 size = this->get_text_size(text);
-        Rectangle text_rect = { pos.x, pos.y - m_line_height / 2, size.x, m_line_height};
-        if (CheckCollisionPointRec(mouse_pos, text_rect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            this->goto_line(char_view.get_line());
-            this->goto_col(char_view.get_col() + 1);
-            //DrawRectangleLinesEx(text_rect, 1, RED);
+    Vector2 selection = buffer->get_selection();
+
+    for (CharView char_view : m_chars) {
+      const char* text = TextFormat("%c", char_view.get_char());
+      Vector2 pos = char_view.get_pos();
+      Color color = char_view.get_color();
+      DrawTextEx(GetFontDefault(), text, pos, 11, 1, color);
+      int source_index = char_view.get_source_index();
+
+      Vector2 size = this->get_text_size(text);
+      Rectangle text_rect = {pos.x, pos.y - m_line_height / 2, size.x,
+                             m_line_height};
+
+      if (selection.x != -1 && selection.y != -1) {
+        if (source_index >= selection.x && source_index <= selection.y) {
+          DrawRectangleRec({text_rect.x, text_rect.y, text_rect.width + 1.1f,
+                            text_rect.height},
+                           ColorAlpha(BLUE, 0.2));
         }
-    }
+      }
 
+      bool is_hovering_text = CheckCollisionPointRec(mouse_pos, text_rect);
+      if (is_hovering_text && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        this->goto_line(char_view.get_line());
+        this->goto_col(char_view.get_col() + 1);
+        if (selection.x == -1 && selection.y == -1) {
+          m_dragging = true;
+          drag_start_index = char_view.get_source_index();
+        } else {
+          m_dragging = false;
+          drag_start_index = -1;
+          drag_end_index = -1;
+          buffer->clear_selection();
+        }
+      }
+
+      if (m_dragging && IsMouseButtonDown(MOUSE_LEFT_BUTTON) &&
+          is_hovering_text) {
+        drag_end_index = char_view.get_source_index();
+        if (drag_end_index < drag_start_index)
+          buffer->set_selection(drag_end_index, drag_start_index);
+        else
+          buffer->set_selection(drag_start_index, drag_end_index);
+      }
+
+      if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+        if (!m_dragging) return;
+
+        if (is_hovering_text) drag_end_index = char_view.get_source_index();
+
+        if (drag_end_index < drag_start_index)
+          buffer->set_selection(drag_end_index, drag_start_index);
+        else if (drag_end_index > drag_start_index)
+          buffer->set_selection(drag_start_index, drag_end_index);
+        else {
+          drag_start_index = -1;
+          drag_start_index = -1;
+          buffer->clear_selection();
+        }
+        m_dragging = false;
+      }
+    }
 }
 
 void Editor::prepare_visible_chars(int start_line_number) {
@@ -366,4 +427,112 @@ void Editor::report(std::string message, ErrorType type){
                 break;
         }
     }
+}
+
+void Editor::new_buffer() {
+  Cursor* cursor = m_buffer_list[m_buffer_index].get_cursor();
+  Rectangle rect = cursor->get_cursor_rect();
+  Buffer temp_buffer("", "//Temp buffer\nDo what ever you want here\n...",
+                     rect.width, rect.height);
+  Cursor* temp_cursor = temp_buffer.get_cursor();
+  temp_cursor->set_cursor_position({m_content_rect.x, m_content_rect.y});
+  m_buffer_list.push_back(temp_buffer);
+  m_buffer_index = m_buffer_list.size() - 1;
+  start_line(1);
+}
+
+void Editor::next_buffer() {
+  m_buffer_index++;
+  if (m_buffer_index >= m_buffer_list.size()) {
+    m_buffer_index = m_buffer_list.size() - 1;
+  }
+  Buffer buffer = m_buffer_list[m_buffer_index];
+  start_line(buffer.get_start_line());
+}
+
+void Editor::prev_buffer() {
+  m_buffer_index--;
+  if (m_buffer_index <= 0) {
+    m_buffer_index = 0;
+  }
+  Buffer buffer = m_buffer_list[m_buffer_index];
+  start_line(buffer.get_start_line());
+}
+
+void Editor::select_all() {
+  Buffer* buffer = &m_buffer_list[m_buffer_index];
+  buffer->set_selection(0, buffer->get_file_contents().size() - 1);
+}
+
+void Editor::copy() {
+  Buffer buffer = m_buffer_list[m_buffer_index];
+  Vector2 selection = buffer.get_last_selection();
+
+  std::stringstream ss;
+  for (CharView char_view : m_chars) {
+    int source_index = char_view.get_source_index();
+    if (selection.x != -1 && selection.y != -1) {
+      if (source_index >= selection.x && source_index <= selection.y) {
+        ss << char_view.get_char();
+      }
+    }
+  }
+
+  std::string copied = ss.str();
+  SetClipboardText(copied.c_str());
+  std::stringstream msg_ss;
+  msg_ss << "Copied " << ss.str().length() << " characters into the clipboard"
+         << std::endl;
+
+  report_info(msg_ss.str());
+}
+
+void Editor::cut() {
+  Buffer* buffer = &m_buffer_list[m_buffer_index];
+  Vector2 selection = buffer->get_last_selection();
+
+  if (selection.x == -1 && selection.y == -1) {
+    return;
+  }
+
+  std::stringstream ss;
+  for (CharView char_view : m_chars) {
+    int source_index = char_view.get_source_index();
+    if (source_index >= selection.x && source_index <= selection.y) {
+      ss << char_view.get_char();
+    }
+  }
+
+  std::string m_text = buffer->get_file_contents();
+  m_text.erase(selection.x, selection.y - selection.x + 1);
+  buffer->set_file_contents(m_text);
+  buffer->clear_selection();
+
+  buffer->set_is_dirty(true);
+  start_line(buffer->get_start_line());
+
+  std::string copied = ss.str();
+  SetClipboardText(copied.c_str());
+  std::stringstream msg_ss;
+  msg_ss << "Cut " << ss.str().length() << " characters into the clipboard"
+         << std::endl;
+
+  report_info(msg_ss.str());
+}
+
+void Editor::paste() {
+  Buffer* buffer = &m_buffer_list[m_buffer_index];
+  const char* paste = GetClipboardText();
+
+  if (paste == NULL) return;
+
+  std::string _paste = paste;
+  std::cout << paste << std::endl;
+  for (char text : _paste) {
+    insert_char(text);
+  }
+  std::stringstream msg_ss;
+  msg_ss << "Pasted " << _paste.length() << " characters into the buffer"
+         << std::endl;
+  report_info(msg_ss.str());
 }
