@@ -1,5 +1,5 @@
 #include <Highlighter.h>
-
+#include <iostream>
 
 void Highlighter::add_words(std::vector<std::string> words, Color color) {
     m_word_lists.push_back({words, color});
@@ -14,29 +14,14 @@ void Highlighter::highlight(std::vector<CharView>&  m_chars) {
         CharView* cv = &m_chars[index];
         char c = cv->get_char();
 
-        if (c == '/' && index + 1 < m_chars.size() && m_chars[index + 1].get_char() == '*') {
-            Color color = ColorBrightness(GREEN, -0.5);
-            for (int i = index; i < (int)m_chars.size(); i++) {
-                c = m_chars[i].get_char();
-                if (c == '*' && i + 1 < m_chars.size() && m_chars[i + 1].get_char() == '/') {
-                    m_chars[i].set_color(color);
-                    m_chars[i + 1].set_color(color);
-                    index = i + 1;
-                    break;
-                }
-                m_chars[i].set_color(color);
-            }
-        } else if (c == '/' && index + 1 < m_chars.size() && m_chars[index + 1].get_char() == '/') {
-            Color color = ColorBrightness(GREEN, -0.5);
-            int line = cv->get_line();
-            for (int i = index; i < (int)m_chars.size(); i++) {
-                if (m_chars[i].get_line() > line) {
-                    index = i;
-                    break;
-                }
-                m_chars[i].set_color(color);
-            }
-        } else if (c == '<') {
+        if (m_func != nullptr) {
+            bool did_highlight = m_func(m_chars, &index);
+            //std::cout << "Dit highlight? " << did_highlight << std::endl;
+            if (did_highlight)
+                continue;
+        }
+
+        if (c == '<') {
             for (int i = index + 1; i < (int)m_chars.size(); i++) {
                 char c = m_chars[i].get_char();
                 if (c == '>' || c == '=' || c == ' ') { index = i; break; }

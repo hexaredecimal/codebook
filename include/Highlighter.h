@@ -7,7 +7,7 @@
 #include <string>
 
 
-using HighlighterFunction = std::function<void(std::vector<CharView>&, int*)>;
+using HighlighterFunction = std::function<bool(std::vector<CharView>&, int*)>;
 class Highlighter {
 public:
     Highlighter():
@@ -20,7 +20,7 @@ public:
 
     std::vector<std::string> get_extensions() { return m_exts; }
 
-    void set_highter_function(HighlighterFunction func) { m_func; }
+    void set_highter_function(HighlighterFunction func) { m_func = func; }
 private:
     struct HighlighterGroup {
     public:
