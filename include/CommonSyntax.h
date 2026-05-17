@@ -10,6 +10,7 @@ public:
 
 private:
     static Highlighter c_cpp();
+    static Highlighter py();
 
     static std::vector<Highlighter> MAP;
 };
